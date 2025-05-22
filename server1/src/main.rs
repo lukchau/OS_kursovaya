@@ -9,6 +9,7 @@ use ctrlc;
 use rayon::ThreadPoolBuilder;
 use std::time::Duration;
 
+// Функция для обработки клиентского подключения
 fn handle_client(mut stream: TcpStream, log_sender: mpsc::Sender<String>) {
     let client_addr = stream.peer_addr().unwrap();
     log_sender.send(format!("Клиент подключен: {}", client_addr)).unwrap();
@@ -19,9 +20,9 @@ fn handle_client(mut stream: TcpStream, log_sender: mpsc::Sender<String>) {
         match stream.read(&mut buffer) {
             Ok(len) if len > 0 => {
                 let request = String::from_utf8_lossy(&buffer[..len]).to_string();
-                if request.trim() == "disconnect" {
+                if request.trim() == "disconnect" { // Проверяем, не запрос ли это на отключение
                     log_sender.send(format!("Клиент отключился: {}", client_addr)).unwrap();
-                    if let Err(e) = stream.shutdown(std::net::Shutdown::Both) {
+                    if let Err(e) = stream.shutdown(std::net::Shutdown::Both) { // Закрываем соединение
                         log_sender.send(format!("Ошибка при отключении клиента {}: {}", client_addr, e)).unwrap();
                     }
                     return;
@@ -55,7 +56,7 @@ fn handle_client(mut stream: TcpStream, log_sender: mpsc::Sender<String>) {
         // Отправляем данные клиенту с проверкой соединения
         match stream.write(response.as_bytes()) {
             Ok(_) => {
-                if let Err(e) = stream.flush() {
+                if let Err(e) = stream.flush() { // Сбрасываем буфер
                     log_sender.send(format!("Ошибка сброса буфера для клиента {}: {}", client_addr, e)).unwrap();
                     return;
                 }
@@ -67,10 +68,11 @@ fn handle_client(mut stream: TcpStream, log_sender: mpsc::Sender<String>) {
             }
         }
 
-        thread::sleep(Duration::from_secs(10));
+        thread::sleep(Duration::from_secs(10)); // 10 секунд перед повторной отправкой данных
     }
 }
 
+// Функиця для логгиирования 
 fn logging_server(receiver: mpsc::Receiver<String>) {
     let mut file = OpenOptions::new()
         .create(true)
@@ -83,14 +85,14 @@ fn logging_server(receiver: mpsc::Receiver<String>) {
     }
 }
 
-#[tokio::main]
+#[tokio::main] // Асинхронное выполнение
 async fn main() -> std::io::Result<()> {
     let listener = TcpListener::bind("0.0.0.0:7878").expect("Не удалось запустить сервер");
     println!("Сервер 1 запущен на порту 7878");
 
-    let (log_sender, log_receiver) = mpsc::channel();
+    let (log_sender, log_receiver) = mpsc::channel(); // Канал для логгирования
     let log_sender_clone = log_sender.clone();
-    thread::spawn(move || logging_server(log_receiver));
+    thread::spawn(move || logging_server(log_receiver)); // Поток для логгирования
 
     log_sender.send("Сервер запущен".to_string()).unwrap();
 
@@ -100,9 +102,9 @@ async fn main() -> std::io::Result<()> {
         std::process::exit(0);
     }).expect("Ошибка при установке обработчика Ctrl+C");
 
-    let pool = ThreadPoolBuilder::new().num_threads(5).build().unwrap();
+    let pool = ThreadPoolBuilder::new().num_threads(5).build().unwrap(); // Пул потоков - 5 max
 
-    for stream in listener.incoming() {
+    for stream in listener.incoming() { // Обработка входящих соединений
         match stream {
             Ok(stream) => {
                 let log_sender = log_sender.clone();

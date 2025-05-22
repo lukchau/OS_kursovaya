@@ -28,15 +28,16 @@ struct ClientApp {
     client_id: u128,
 }
 
+// Реализация по умолчанию для ClientApp
 impl Default for ClientApp {
     fn default() -> Self {
-        let (log_sender, log_receiver) = mpsc::channel();
-        thread::spawn(move || logging_client(log_receiver));
+        let (log_sender, log_receiver) = mpsc::channel(); // Создание канала для логирования
+        thread::spawn(move || logging_client(log_receiver)); // Запуск потока для логирования
 
         let client_id = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
-            .as_millis();
+            .as_millis(); // Получение идентификатора клиента
 
         let log_sender_clone = log_sender.clone();
         log_sender_clone.send(format!("Клиент запущен. ID клиента: {}", client_id)).unwrap();
@@ -61,10 +62,11 @@ impl Default for ClientApp {
     }
 }
 
+// Реализация интерфейса
 impl eframe::App for ClientApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Курсовая работа (Вариант 6)");
+            ui.heading("Курсовая работа (Вариант 6)"); // Заголовок окна
 
             ui.horizontal(|ui| {
                 if ui.button("Подключиться к серверу 1").clicked() {
@@ -80,7 +82,7 @@ impl eframe::App for ClientApp {
                         let (_handle, stop_sender) = get_server_data_async(
                             ip, data, status, log_sender, server_name, error_flag, error_logged, self.client_id
                         );
-                        self.server1_stop_sender = Some(stop_sender);
+                        self.server1_stop_sender = Some(stop_sender); // Установка отправителя для остановки первого сервера
                         self.connected_to_server1 = true;
                     }
                 }
@@ -98,7 +100,7 @@ impl eframe::App for ClientApp {
                         let (_handle, stop_sender) = get_server_data_async(
                             ip, data, status, log_sender, server_name, error_flag, error_logged, self.client_id
                         );
-                        self.server2_stop_sender = Some(stop_sender);
+                        self.server2_stop_sender = Some(stop_sender); // Установка отправителя для остановки второго сервера
                         self.connected_to_server2 = true;
                     }
                 }
@@ -112,8 +114,9 @@ impl eframe::App for ClientApp {
                 }
             });
 
-            ui.separator();
+            ui.separator(); // Разделитель
 
+            // Данные о серверах
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.label("Сервер 1:");
                 if *self.server1_error.lock().unwrap() {
@@ -137,8 +140,9 @@ impl eframe::App for ClientApp {
     }
 }
 
+// Методы для приложения
 impl ClientApp {
-    fn disconnect_from_server(&mut self, server_number: u8) {
+    fn disconnect_from_server(&mut self, server_number: u8) { // Отключение серверов
         match server_number {
             1 => {
                 if self.connected_to_server1 {
@@ -171,6 +175,7 @@ impl ClientApp {
     }
 }
 
+// Функции форматирования ответов от серверов из JSON в удобный формат
 fn format_server1_response(json_str: &str) -> String {
     match serde_json::from_str::<Value>(json_str) {
         Ok(json) => {
@@ -222,6 +227,7 @@ fn format_server2_response(json_str: &str) -> String {
     }
 }
 
+// Асинхронное получение данных от сервера
 fn get_server_data_async(
     ip: String,
     data: Arc<Mutex<String>>,
@@ -232,7 +238,7 @@ fn get_server_data_async(
     error_logged: Arc<Mutex<bool>>,
     client_id: u128,
 ) -> (thread::JoinHandle<()>, mpsc::Sender<()>) {
-    let (stop_sender, stop_receiver) = mpsc::channel();
+    let (stop_sender, stop_receiver) = mpsc::channel(); // Создание канала для остановки
 
     let handle = thread::spawn(move || {
         log_sender.send(format!("Подключение к {}. ID клиента: {}", server_name, client_id)).unwrap();
@@ -255,12 +261,12 @@ fn get_server_data_async(
 
         loop {
             if stop_receiver.try_recv().is_ok() {
-                let _ = stream.shutdown(Shutdown::Both);
+                let _ = stream.shutdown(Shutdown::Both); // Закрытие соединения
                 return;
             }
 
             let result = {
-                let request = "request";
+                let request = "request"; // Запрос
                 if let Err(e) = stream.write(request.as_bytes()) {
                     *error_flag.lock().unwrap() = true;
                     if !*error_logged.lock().unwrap() {
@@ -270,10 +276,10 @@ fn get_server_data_async(
                     continue;
                 }
 
-                let mut buffer = [0; 1024];
+                let mut buffer = [0; 1024]; // Буфер чтения данных
                 match stream.read(&mut buffer) {
                     Ok(len) if len > 0 => {
-                        let json_str = String::from_utf8_lossy(&buffer[..len]).to_string();
+                        let json_str = String::from_utf8_lossy(&buffer[..len]).to_string(); // Преобразование данных в строку
                         if !*error_logged.lock().unwrap() {
                             log_sender.send(format!("Полученная информация от {}. ID клиента: {}. Данные: {}", server_name, client_id, json_str)).unwrap();
                         }
@@ -305,13 +311,14 @@ fn get_server_data_async(
                 if result.contains("Ошибка") { "Ошибка" } else { "Успех" }
             );
 
-            thread::sleep(Duration::from_secs(10));
+            thread::sleep(Duration::from_secs(10)); // Ожидание 10 секунд перед следующей отправкой данных
         }
     });
 
     (handle, stop_sender)
 }
 
+// Функция логгирования сообщений клиента
 fn logging_client(receiver: mpsc::Receiver<String>) {
     let mut file = OpenOptions::new()
         .create(true)
@@ -335,7 +342,7 @@ fn main() -> Result<(), eframe::Error> {
     }).expect("Ошибка установки обработчика Ctrl+C");
 
     eframe::run_native(
-        "Курсовая работа (Вариант 6)",
+        "Курсовая работа (Вариант 6)", // Заголовок окна
         options,
         Box::new(|_| Ok(Box::new(app))),
     )
